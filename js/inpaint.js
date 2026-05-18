@@ -10,7 +10,7 @@ export async function ip_prepare_model(model_path){
 
 /// arguments: openCV instance; HTML canvas element; bool
 /// retval: ONNX runtime tensor
-export function ip_pre_process(cv, img_canvas, dilate_layer){
+export function ip_pre_process(cv, img_canvas){
     const SZ = 512;
     // quantization params from metadata: scale=1.5259e-05, zero_point=0
     // uint16 = float_val / scale  (equivalent to float_val * 65535)
@@ -36,30 +36,6 @@ export function ip_pre_process(cv, img_canvas, dilate_layer){
     }
     img_resized.delete();
 
-    if (dilate_layer) { // apply gaussian blur. TODO: convert RGB to grayscale first so we don't need to run the operation 3x per pixel.
-        const ksize = 5;
-        const ch0 = new cv.Mat(SZ, SZ, cv.CV_16U);
-        const ch1 = new cv.Mat(SZ, SZ, cv.CV_16U);
-        const ch2 = new cv.Mat(SZ, SZ, cv.CV_16U);
-        ch0.data.set(img_flat.subarray(0, HW));
-        ch1.data.set(img_flat.subarray(HW, 2 * HW));
-        ch2.data.set(img_flat.subarray(2 * HW, 3 * HW));
-
-        const b0 = new cv.Mat();
-        const b1 = new cv.Mat();
-        const b2 = new cv.Mat();
-        cv.GaussianBlur(ch0, b0, new cv.Size(ksize, ksize), 0);
-        cv.GaussianBlur(ch1, b1, new cv.Size(ksize, ksize), 0);
-        cv.GaussianBlur(ch2, b2, new cv.Size(ksize, ksize), 0);
-
-        img_flat.set(b0.data, 0);
-        img_flat.set(b1.data, HW);
-        img_flat.set(b2.data, 2 * HW);
-
-        ch0.delete(); ch1.delete(); ch2.delete();
-        b0.delete();  b1.delete();  b2.delete();
-    }
-
     const img_tensor = new ort.Tensor("uint16", img_flat, [1, 3, SZ, SZ]);
 
     return img_tensor;
@@ -67,7 +43,7 @@ export function ip_pre_process(cv, img_canvas, dilate_layer){
 
 /// arguments: openCV instance; HTML canvas element
 /// retval: ONNX runtime tensor
-export function ip_preprocess_mask(cv, canvas){ // converts RGB to mask (1 channel binary value; 0 or 255)
+export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to mask (1 channel binary value; 0 or 255)
     const SZ = 512;
     const QSCALE = 1.5259021893143654e-05;
     const W = canvas.width;
@@ -100,7 +76,16 @@ export function ip_preprocess_mask(cv, canvas){ // converts RGB to mask (1 chann
     cv.resize(gray, resized, new cv.Size(SZ, SZ));
     gray.delete();
 
-    // 4. uint8 to uint16
+    // 4. apply dilation (blur to expand mask edges)
+    if (dilate_layer) {
+        const ksize = 1;
+        const blurred = new cv.Mat();
+        cv.GaussianBlur(resized, blurred, new cv.Size(ksize, ksize), 0);
+        resized.delete();
+        resized = blurred;
+    }
+
+    // 5. do some conversion...
     const quantized = new Uint16Array(SZ * SZ);
     for (let i = 0; i < SZ * SZ; i++) {
         quantized[i] = Math.round((resized.data[i] / 255) / QSCALE);

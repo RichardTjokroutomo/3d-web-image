@@ -84,6 +84,7 @@ export async function lib_main(){
             alert("Please upload an image first.");
             return;
         }
+        console.log("processing image!");
         document.getElementById('status').innerHTML = 'Processing...';
         const inpainted_layers = await generate_inpainted_layers(img_elem, da_ort_sess, lama_ort_sess);
 
