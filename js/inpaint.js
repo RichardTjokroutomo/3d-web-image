@@ -38,7 +38,7 @@ export function ip_pre_process(cv, img_canvas, dilate_layer){
     img_resized.delete();
 
     if (dilate_layer) { // apply gaussian blur. TODO: convert RGB to grayscale first so we don't need to run the operation 3x per pixel.
-        const ksize = 1;
+        const ksize = 5;
         const ch0 = new cv.Mat(SZ, SZ, cv.CV_16U);
         const ch1 = new cv.Mat(SZ, SZ, cv.CV_16U);
         const ch2 = new cv.Mat(SZ, SZ, cv.CV_16U);

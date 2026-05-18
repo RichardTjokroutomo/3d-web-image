@@ -65,7 +65,6 @@ async function generate_inpainted_layers(img_elem, da_ort_sess, lama_ort_sess){
 /// the main function
 /// ========================================================================================================
 export async function lib_main(){
-    await new Promise(r => setTimeout(r, 200)); // TODO: currently, we wait so the image can load. fix this. don't just wait.
     console.log("begin execution!");
 
     // prepare models
@@ -79,7 +78,13 @@ export async function lib_main(){
     const button_elem = document.getElementById("process");
     const div_elem = document.getElementById("result");
     
+    // TODO: this shouldn't be placed here. 
     button_elem.addEventListener("click", async (event) => {
+        if (!img_elem.src || img_elem.naturalWidth === 0) {
+            alert("Please upload an image first.");
+            return;
+        }
+        document.getElementById('status').innerHTML = 'Processing...';
         const inpainted_layers = await generate_inpainted_layers(img_elem, da_ort_sess, lama_ort_sess);
 
         let layer_elements = [];
