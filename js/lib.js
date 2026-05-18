@@ -26,8 +26,8 @@ async function inpaint_layers(ort_sess, img_elem_canvas, layer_i_canvas, layer_i
     const layer_i_plus_one_mask = ip_preprocess_mask(cv, layer_i_plus_one_canvas, false); // ORT tensor
     const mask = ip_preprocess_mask(cv, layer_i_plus_one_canvas, true); // ORT tensor
             
-    const result = await ip_run_inference(ort_sess, prep_img, mask); // ORT tensor
-    const canvas = ip_post_process(result); // canvas
+    const result = await ip_run_inference(ort_sess, prep_img, layer_i_plus_one_mask); // ORT tensor
+    const canvas = ip_post_process(result, prep_img, mask); // canvas
 
     const cropped_canvas = ip_image_processing(canvas, layer_i_plus_one_mask, layer_i_mask); // canvas
 

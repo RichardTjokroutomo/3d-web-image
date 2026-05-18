@@ -105,19 +105,35 @@ export async function ip_run_inference(ort_session, image_tensor, mask_tensor){
 
 /// arguments: ONNX runtime tensor (1, 3, 512, 512)
 /// retval: HTML canvas element
-export function ip_post_process(result){
-    const outputTensors = Object.values(result);
-    if (outputTensors.length === 0) {
-        console.error("no output tensors in inference result");
-        return null;
-    }
-    const tensor = outputTensors[0];
-    const data = tensor.data; //uint16 arr
-
+export function ip_post_process(result, original_img, mask){
     const QSCALE = 1.5259021893143654e-05;
     const SZ = 512;
     const HW = SZ * SZ;
 
+    // result 
+    const result_tensor = Object.values(result);
+    if (result_tensor.length === 0) {
+        console.error("result_tensor is empty!");
+        return null;
+    }
+    const tensor = result_tensor[0];
+    const result_data = tensor.data; //uint16 arr
+
+    // original image
+    const original_data = original_img.data; //uint16 arr
+
+    // mask
+    const maskData = mask.data; // uint16 arr, single channel
+    // let resized = new cv.Mat();
+    // cv.resize(gray, resized, new cv.Size(SZ, SZ));
+    // gray.delete();
+    // const ksize = 1;
+    // const blurred = new cv.Mat();
+    // cv.GaussianBlur(resized, blurred, new cv.Size(ksize, ksize), 0);
+    // resized.delete();
+    // resized = blurred;
+
+    // retval
     const canvas = document.createElement("canvas");
     canvas.width = SZ;
     canvas.height = SZ;
@@ -127,18 +143,40 @@ export function ip_post_process(result){
 
     for (let i = 0; i < HW; i++) {
         const j = i * 4;
-        const r = Math.min(255, Math.max(0, Math.round(data[i] * QSCALE * 255)));
-        const g = Math.min(255, Math.max(0, Math.round(data[HW + i] * QSCALE * 255)));
-        const b = Math.min(255, Math.max(0, Math.round(data[2 * HW + i] * QSCALE * 255)));
-        let alpha_val = 0;
-        if (r + g + b > 0) {
-            alpha_val = 255;
-        }
-        pixels[j]     = r;
-        pixels[j + 1] = g;
-        pixels[j + 2] = b;
-        pixels[j + 3] = alpha_val;
+        const res_r = Math.min(255, Math.max(0, Math.round(result_data[i] * QSCALE * 255)));
+        const res_g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * QSCALE * 255)));
+        const res_b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * QSCALE * 255)));
+
+        const orig_r = Math.min(255, Math.max(0, Math.round(original_data[i] * QSCALE * 255)));
+        const orig_g = Math.min(255, Math.max(0, Math.round(original_data[HW + i] * QSCALE * 255)));
+        const orig_b = Math.min(255, Math.max(0, Math.round(original_data[2 * HW + i] * QSCALE * 255)));
+
+        const alpha = Math.min(1, Math.max(0, maskData[i] * QSCALE));
+
+        const fg = Math.round(alpha * 255);
+
+        // output = result * alpha + original * (1 - alpha)
+        pixels[j]     = Math.min(255, Math.round(res_r * alpha + orig_r * (1 - alpha)));
+        pixels[j + 1] = Math.min(255, Math.round(res_g * alpha + orig_g * (1 - alpha)));
+        pixels[j + 2] = Math.min(255, Math.round(res_b * alpha + orig_b * (1 - alpha)));
+        pixels[j + 3] = 255;
     }
+
+    // for (let i = 0; i < HW; i++) {
+    //     const j = i * 4;
+    //     const r = Math.min(255, Math.max(0, Math.round(result_data[i] * QSCALE * 255)));
+    //     const g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * QSCALE * 255)));
+    //     const b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * QSCALE * 255)));
+    //     let alpha_val = 0;
+    //     if (r + g + b > 0) {
+    //         alpha_val = 255;
+    //     }
+    //     pixels[j]     = r;
+    //     pixels[j + 1] = g;
+    //     pixels[j + 2] = b;
+    //     pixels[j + 3] = alpha_val;
+    // }
+
     ctx.putImageData(imageData, 0, 0);
     return canvas;
 }
