@@ -20,23 +20,55 @@ Currently, the demo runs on an HTTP server. To run the demo:
 python3 -m http.server 8000
 ```
 
-And open the page on `localhost:8000`.
+And open the page on `localhost:8000`. Note that the model runs entirely on the browser and that the server is only used to serve the HTML & JS files. This is necessary as the browser doesn't allow cross origin requests using the file protocol:
+
+```
+index.html:1 Access to script at 'file:///<path_to_project_dir>/js/lib.js' from origin 'null' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome, chrome-extension, chrome-untrusted, data, http, https, isolated-app.
+js/lib.js:1  Failed to load resource: net::ERR_FAILED
+index.html:18 Uncaught ReferenceError: lib_main is not defined
+    at Object.onRuntimeInitialized (index.html:18:9)
+    at doRun (opencv.js:56:18338)
+    at run (opencv.js:56:18560)
+    at cv (opencv.js:56:19694)
+    at opencv.js:70:10
+    at opencv.js:14:15
+    at opencv.js:16:2
+index.html:1 Unsafe attempt to load URL file:///<path_to_project_dir>/index.html from frame with URL file:///<path_to_project_dir>/index.html. 'file:' URLs are treated as unique security origins.
+
+
+```
+
+Afterwards, wait until the text "Models ready" is visible before you click the process button.
 
 ---
 
 ## Limitations
 Below is a list of limitations as of 17/5/2026:
 
-1. Despite the usage of the terms "framework" & "library", currently the code only works for `index.html`. This is not because of the limitations within JavaScript itself but rather the lack of development time.
+1. Despite the usage of the terms "framework" & "library", currently the code only works for sample `index.html` provided. This is not because of the limitations within JavaScript itself but rather the lack of development time.
 2. Inference runs very slowly. This can hopefully be refactored by using WebNN and models with fewer parameters.
 3. Currently, only simple dilation is being implemented. This should probably be updated in the future.
-4. `OpenCV.js` cannot be imported as ES Module. Instead, we need to import it with `<script>` and wait for it to fully load before our framework can be loaded. Although it has no noticeable performance penalty, this solution is not elegant at all, and an alternate solution is needed before this project is ready for commercial use. 
+4. `OpenCV.js` cannot be imported as ES Module. Instead, we need to import it with `<script>` and wait for it to fully load before our framework can be loaded:
+
+```html
+<script type="text/javascript">
+    var Module = {
+    // https://emscripten.org/docs/api_reference/module.html#Module.onRuntimeInitialized
+    onRuntimeInitialized() {
+        lib_main(); // wrapper function to our JS library
+    }
+    };
+</script>
+<script async src="js/opencv.js" type="text/javascript"></script>
+<script src="js/lib.js" type="module"></script>
+```
+ Although it causes no noticeable performance loss, this solution is not elegant at all, and an alternate solution is needed before this project is ready for commercial use. 
 
 ---
 
 ## Future works
 
-1. Fix dilation's impl.
+1. Update dilation's impl.
 2. Use sliding window to do depth estimation. This way, we don't have to suffer from resolution loss due to downsampling. 
 3. Find a better way to import `OpenCV.js`.
 4. Refactor the code so it can be plugged into any frontend project using `<script>`. The idea is that all target `<image>` elements must be wrapped in a div container with a predefined class or ID.
