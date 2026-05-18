@@ -1,6 +1,5 @@
-import * as ort from "/js/ort/ort.mjs";
-
-ort.env.wasm.wasmPaths = "/js/ort/";
+import * as ort from "./ort/ort.mjs";
+ort.env.wasm.wasmPaths = new URL("./js/ort/", document.baseURI).href;
 
 /// arguments: string
 /// retval: ONNX runtime session

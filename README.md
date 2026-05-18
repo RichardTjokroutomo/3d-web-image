@@ -14,29 +14,30 @@ For `lama_dilated`, if you're downloading from the download link, notice that Qu
 python3 utils/onnx_converter.py
 ```
 
-Currently, the demo runs on an HTTP server. To run the demo:
+To run the demo, we want to launch a local server so the browser can make `http` requests to load the files. This mimics real world scenario where the static files are stored in remote server. 
+
+To do this, run:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-And open the page on `localhost:8000`. Note that the model runs entirely on the browser and that the server is only used to serve the HTML & JS files. This is necessary as the browser doesn't allow cross origin requests using the file protocol:
+And open the page on `localhost:8000`. 
 
+
+If you want to load the files via `file` protocol, you need to disable web security. Below are the commands to disable web security on Chrome:
+
+On Windows:
 ```
-index.html:1 Access to script at 'file:///<path_to_project_dir>/js/lib.js' from origin 'null' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome, chrome-extension, chrome-untrusted, data, http, https, isolated-app.
-js/lib.js:1  Failed to load resource: net::ERR_FAILED
-index.html:18 Uncaught ReferenceError: lib_main is not defined
-    at Object.onRuntimeInitialized (index.html:18:9)
-    at doRun (opencv.js:56:18338)
-    at run (opencv.js:56:18560)
-    at cv (opencv.js:56:19694)
-    at opencv.js:70:10
-    at opencv.js:14:15
-    at opencv.js:16:2
-index.html:1 Unsafe attempt to load URL file:///<path_to_project_dir>/index.html from frame with URL file:///<path_to_project_dir>/index.html. 'file:' URLs are treated as unique security origins.
-
-
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --disable-web-security --disable-gpu --user-data-dir="C:\chromeTemp"
 ```
+
+On Linux:
+```
+google-chrome --disable-web-security --user-data-dir="/temp/dev/"
+```
+
+And open `index.html` on the browser.
 
 Afterwards, wait until the text "Models ready" is visible before you click the process button.
 
