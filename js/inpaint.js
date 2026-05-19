@@ -12,9 +12,6 @@ export async function ip_prepare_model(model_path){
 /// retval: ONNX runtime tensor
 export function ip_pre_process(cv, img_canvas){
     const SZ = 512;
-    // quantization params from metadata: scale=1.5259e-05, zero_point=0
-    // uint16 = float_val / scale  (equivalent to float_val * 65535)
-    const QSCALE = 1.5259021893143654e-05;
 
     // --- image ---
     const img_mat = cv.imread(img_canvas);
@@ -26,26 +23,23 @@ export function ip_pre_process(cv, img_canvas){
     img_rgb.delete();
 
     const HW = SZ * SZ;
-    let img_flat = new Uint16Array(3 * HW);
+    let img_flat = new Float32Array(3 * HW);
     for (let i = 0; i < HW; i++) {
         const base = i * 3;
         const ch_base = i; // spatial index per channel
-        img_flat[0 * HW + ch_base] = Math.round((img_resized.data[base]     / 255) / QSCALE);
-        img_flat[1 * HW + ch_base] = Math.round((img_resized.data[base + 1] / 255) / QSCALE);
-        img_flat[2 * HW + ch_base] = Math.round((img_resized.data[base + 2] / 255) / QSCALE);
+        img_flat[0 * HW + ch_base] = img_resized.data[base]     / 255;
+        img_flat[1 * HW + ch_base] = img_resized.data[base + 1] / 255;
+        img_flat[2 * HW + ch_base] = img_resized.data[base + 2] / 255;
     }
     img_resized.delete();
 
-    const img_tensor = new ort.Tensor("uint16", img_flat, [1, 3, SZ, SZ]);
-
-    return img_tensor;
+    return new ort.Tensor("float32", img_flat, [1, 3, SZ, SZ]);
 }
 
 /// arguments: openCV instance; HTML canvas element
 /// retval: ONNX runtime tensor
 export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to mask (1 channel binary value; 0 or 255)
     const SZ = 512;
-    const QSCALE = 1.5259021893143654e-05;
     const W = canvas.width;
     const H = canvas.height;
 
@@ -76,29 +70,34 @@ export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to
     cv.resize(gray, resized, new cv.Size(SZ, SZ));
     gray.delete();
 
-    // 4. apply dilation (blur to expand mask edges)
-    if (dilate_layer) {
-        const ksize = 1;
+    if (dilate_layer) { // TODO: replace this dilation logic elsewhere.
+        const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
+        const dilated = new cv.Mat();
+        cv.dilate(resized, dilated, kernel);
+        kernel.delete();
+
         const blurred = new cv.Mat();
-        cv.GaussianBlur(resized, blurred, new cv.Size(ksize, ksize), 0);
+        cv.GaussianBlur(dilated, blurred, new cv.Size(31, 31), 10);
+        dilated.delete();
+
         resized.delete();
         resized = blurred;
     }
 
-    // 5. do some conversion...
-    const quantized = new Uint16Array(SZ * SZ);
+    // 5. normalize to [0, 1] float32 range
+    const normalized = new Float32Array(SZ * SZ);
     for (let i = 0; i < SZ * SZ; i++) {
-        quantized[i] = Math.round((resized.data[i] / 255) / QSCALE);
+        normalized[i] = resized.data[i] / 255;
     }
     resized.delete();
 
-    return new ort.Tensor("uint16", quantized, [1, 1, SZ, SZ]);
+    return new ort.Tensor("float32", normalized, [1, 1, SZ, SZ]);
 }
 
 /// arguments: ONNX runtime session; ONNX runtime tensor (1, 3, 512, 512); ONNX runtime tensor (1, 1, 512, 512)
 /// retval: ONNX runtime tensor (1, 3, 512, 512)
 export async function ip_run_inference(ort_session, image_tensor, mask_tensor){
-    const feeds = { image: image_tensor, mask: mask_tensor };
+    const feeds = { model: image_tensor, mask: mask_tensor };
     let result = await ort_session.run(feeds);
     return result;
 }
@@ -106,32 +105,23 @@ export async function ip_run_inference(ort_session, image_tensor, mask_tensor){
 /// arguments: ONNX runtime tensor (1, 3, 512, 512)
 /// retval: HTML canvas element
 export function ip_post_process(result, original_img, mask){
-    const QSCALE = 1.5259021893143654e-05;
     const SZ = 512;
     const HW = SZ * SZ;
 
-    // result 
+    // result
     const result_tensor = Object.values(result);
     if (result_tensor.length === 0) {
         console.error("result_tensor is empty!");
         return null;
     }
     const tensor = result_tensor[0];
-    const result_data = tensor.data; //uint16 arr
+    const result_data = tensor.data; // float32 arr in [0, 1]
 
     // original image
-    const original_data = original_img.data; //uint16 arr
+    const original_data = original_img.data; // float32 arr in [0, 1]
 
     // mask
-    const maskData = mask.data; // uint16 arr, single channel
-    // let resized = new cv.Mat();
-    // cv.resize(gray, resized, new cv.Size(SZ, SZ));
-    // gray.delete();
-    // const ksize = 1;
-    // const blurred = new cv.Mat();
-    // cv.GaussianBlur(resized, blurred, new cv.Size(ksize, ksize), 0);
-    // resized.delete();
-    // resized = blurred;
+    const maskData = mask.data; // float32 arr in [0, 1], single channel
 
     // retval
     const canvas = document.createElement("canvas");
@@ -143,22 +133,27 @@ export function ip_post_process(result, original_img, mask){
 
     for (let i = 0; i < HW; i++) {
         const j = i * 4;
-        const res_r = Math.min(255, Math.max(0, Math.round(result_data[i] * QSCALE * 255)));
-        const res_g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * QSCALE * 255)));
-        const res_b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * QSCALE * 255)));
+        const res_r = Math.min(255, Math.max(0, Math.round(result_data[i] * 255)));
+        const res_g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * 255)));
+        const res_b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * 255)));
 
-        const orig_r = Math.min(255, Math.max(0, Math.round(original_data[i] * QSCALE * 255)));
-        const orig_g = Math.min(255, Math.max(0, Math.round(original_data[HW + i] * QSCALE * 255)));
-        const orig_b = Math.min(255, Math.max(0, Math.round(original_data[2 * HW + i] * QSCALE * 255)));
+        const orig_r = Math.min(255, Math.max(0, Math.round(original_data[i] * 255)));
+        const orig_g = Math.min(255, Math.max(0, Math.round(original_data[HW + i] * 255)));
+        const orig_b = Math.min(255, Math.max(0, Math.round(original_data[2 * HW + i] * 255)));
 
-        const alpha = Math.min(1, Math.max(0, maskData[i] * QSCALE));
+        const alpha = Math.min(1, Math.max(0, maskData[i]));
 
         const fg = Math.round(alpha * 255);
 
         // output = result * alpha + original * (1 - alpha)
-        pixels[j]     = Math.min(255, Math.round(res_r * alpha + orig_r * (1 - alpha)));
-        pixels[j + 1] = Math.min(255, Math.round(res_g * alpha + orig_g * (1 - alpha)));
-        pixels[j + 2] = Math.min(255, Math.round(res_b * alpha + orig_b * (1 - alpha)));
+        // pixels[j]     = Math.min(255, Math.round(res_r * alpha + orig_r * (1 - alpha)));
+        // pixels[j + 1] = Math.min(255, Math.round(res_g * alpha + orig_g * (1 - alpha)));
+        // pixels[j + 2] = Math.min(255, Math.round(res_b * alpha + orig_b * (1 - alpha)));
+        // pixels[j + 3] = 255;
+
+        pixels[j]     = Math.min(255, Math.round(res_r));
+        pixels[j + 1] = Math.min(255, Math.round(res_g));
+        pixels[j + 2] = Math.min(255, Math.round(res_b));
         pixels[j + 3] = 255;
     }
 
@@ -249,29 +244,62 @@ export function ip_segment_into_layers(orig_img_elem, depth_canvas){
     return layers;
 }
 
-// arguments: canvas, ORT tensor [1, 1, 512, 512], ORT tensor [1, 1, 512, 512]
+// arguments: canvas, ORT tensor [1, 1, 512, 512] (feathered crop mask)
 // retval: canvas
-export function ip_image_processing(canvas, layer_i_plus_one_mask, layer_i_mask) {
-    // Read pixel data from the inpainted result canvas (512x512)
+export function ip_image_processing(canvas, crop_mask) {
+    // read pixel data from the inpainted result canvas (512x512)
     const ctx = canvas.getContext("2d");
     const W = canvas.width;
     const H = canvas.height;
     const imageData = ctx.getImageData(0, 0, W, H);
     const pixels = imageData.data;
 
-    const mask1_data = layer_i_plus_one_mask.data;
-    const mask2_data = layer_i_mask.data;
+    const mask_data = crop_mask.data; // float32 in [0, 1]
 
     for (let i = 0; i < W * H; i++) {
-        if (mask1_data[i] === 0 && mask2_data[i] === 0) {
-            const j = i * 4;
-            pixels[j]     = 0;
-            pixels[j + 1] = 0;
-            pixels[j + 2] = 0;
-            pixels[j + 3] = 0;
-        }
+        const keep = mask_data[i]; // smooth transition at crop boundary
+        const j = i * 4;
+        pixels[j]     = Math.round(pixels[j]     * keep);
+        pixels[j + 1] = Math.round(pixels[j + 1] * keep);
+        pixels[j + 2] = Math.round(pixels[j + 2] * keep);
+        pixels[j + 3] = Math.round(pixels[j + 3] * keep);
     }
 
     ctx.putImageData(imageData, 0, 0);
     return canvas;
+}
+
+// arguments: openCV instance; ORT tensor [1, 1, 512, 512]; ORT tensor [1, 1, 512, 512]
+// retval: ORT tensor [1, 1, 512, 512]
+export function ip_create_crop_mask(cv, mask_a, mask_b) {
+    const SZ = 512;
+
+    // combine both binary masks (1 if either has content)
+    const combined = new Uint8Array(SZ * SZ);
+    for (let i = 0; i < SZ * SZ; i++) {
+        combined[i] = (mask_a.data[i] > 0 || mask_b.data[i] > 0) ? 255 : 0;
+    }
+
+    const mat = new cv.Mat(SZ, SZ, cv.CV_8UC1);
+    mat.data.set(combined);
+
+    // dilate to push the crop boundary outward
+    const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
+    const dilated = new cv.Mat();
+    cv.dilate(mat, dilated, kernel);
+    kernel.delete();
+    mat.delete();
+
+    // blur for smooth alpha transition at outer edge
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(dilated, blurred, new cv.Size(1, 1), 10);
+    dilated.delete();
+
+    const feathered = new Float32Array(SZ * SZ);
+    for (let i = 0; i < SZ * SZ; i++) {
+        feathered[i] = blurred.data[i] / 255;
+    }
+    blurred.delete();
+
+    return new ort.Tensor("float32", feathered, [1, 1, SZ, SZ]);
 }
