@@ -29,12 +29,12 @@ If you want to load the files via `file` protocol, you need to disable web secur
 
 On Windows:
 ```
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --disable-web-security --disable-gpu --user-data-dir="C:\chromeTemp"
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --disable-web-security --disable-gpu --user-data-dir="C:\chromeTemp" --enable-features=SharedArrayBuffer
 ```
 
 On Linux:
 ```
-google-chrome --disable-web-security --user-data-dir="/temp/dev/"
+google-chrome --disable-web-security --user-data-dir="/temp/dev/" --enable-features=SharedArrayBuffer
 ```
 
 And open `index.html` on the browser.

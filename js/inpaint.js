@@ -1,11 +1,14 @@
 import * as ort from "./ort/ort.mjs";
 ort.env.wasm.wasmPaths = new URL("./js/ort/", document.baseURI).href;
+ort.env.wasm.simd = true;
+ort.env.wasm.numThreads = navigator.hardwareConcurrency;
 
 /// arguments: string
 /// retval: ONNX runtime session
 export async function ip_prepare_model(model_path){
     const sess = await ort.InferenceSession.create(model_path);
-        return sess;
+
+    return sess;
 }
 
 /// arguments: openCV instance; HTML canvas element; bool
@@ -70,19 +73,19 @@ export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to
     cv.resize(gray, resized, new cv.Size(SZ, SZ));
     gray.delete();
 
-    if (dilate_layer) { // TODO: replace this dilation logic elsewhere.
-        const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
-        const dilated = new cv.Mat();
-        cv.dilate(resized, dilated, kernel);
-        kernel.delete();
+    // if (dilate_layer) { // TODO: replace this dilation logic elsewhere.
+    //     const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
+    //     const dilated = new cv.Mat();
+    //     cv.dilate(resized, dilated, kernel);
+    //     kernel.delete();
 
-        const blurred = new cv.Mat();
-        cv.GaussianBlur(dilated, blurred, new cv.Size(31, 31), 10);
-        dilated.delete();
+    //     const blurred = new cv.Mat();
+    //     cv.GaussianBlur(dilated, blurred, new cv.Size(1, 1), 10);
+    //     dilated.delete();
 
-        resized.delete();
-        resized = blurred;
-    }
+    //     resized.delete();
+    //     resized = blurred;
+    // }
 
     // 5. normalize to [0, 1] float32 range
     const normalized = new Float32Array(SZ * SZ);
@@ -97,7 +100,7 @@ export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to
 /// arguments: ONNX runtime session; ONNX runtime tensor (1, 3, 512, 512); ONNX runtime tensor (1, 1, 512, 512)
 /// retval: ONNX runtime tensor (1, 3, 512, 512)
 export async function ip_run_inference(ort_session, image_tensor, mask_tensor){
-    const feeds = { model: image_tensor, mask: mask_tensor };
+    const feeds = { image: image_tensor, mask: mask_tensor };
     let result = await ort_session.run(feeds);
     return result;
 }
@@ -146,6 +149,7 @@ export function ip_post_process(result, original_img, mask){
         const fg = Math.round(alpha * 255);
 
         // output = result * alpha + original * (1 - alpha)
+
         // pixels[j]     = Math.min(255, Math.round(res_r * alpha + orig_r * (1 - alpha)));
         // pixels[j + 1] = Math.min(255, Math.round(res_g * alpha + orig_g * (1 - alpha)));
         // pixels[j + 2] = Math.min(255, Math.round(res_b * alpha + orig_b * (1 - alpha)));
@@ -180,7 +184,7 @@ export function ip_post_process(result, original_img, mask){
 /// retval: [HTML canvas element, ...]
 export function ip_segment_into_layers(orig_img_elem, depth_canvas){
     console.log("entering ip_segment_into_layers()!")
-    const numLayers = 5;
+    const numLayers = 3;
     const W = depth_canvas.width;
     const H = depth_canvas.height;
     console.log("W: " + W);

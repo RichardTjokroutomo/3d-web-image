@@ -34,7 +34,7 @@ async function inpaint_layers(ort_sess, img_elem_canvas, layer_i_canvas, layer_i
     // create feathered combined mask for smooth crop boundary
     const crop_mask = ip_create_crop_mask(cv, layer_i_plus_one_mask, layer_i_mask); // ORT tensor
     const cropped_canvas = ip_image_processing(canvas, crop_mask); // canvas
-
+    console.log(`inpainting 1 layer time: ${TIME_INPAINT_1 - TIME_INPAINT_0} ms`);
     return [cropped_canvas, TIME_INPAINT_1 - TIME_INPAINT_0];
 }
 
@@ -75,7 +75,7 @@ export async function lib_main(){
 
     // prepare models
     const da_ort_sess = await da_prepare_model("./models/depth_anything_v2_vits.onnx");
-    const lama_ort_sess = await ip_prepare_model("./models/lama_regular.onnx");
+    const lama_ort_sess = await ip_prepare_model("./models/lama_regular_quantized.onnx");
 
     const load_time_1 = Date.now();
     console.log(`time taken to prepare models: ${load_time_1 - load_time_0} ms`);

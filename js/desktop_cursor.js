@@ -41,7 +41,8 @@ function updateParallax(div_elem, layer_elements, cursor_x, cursor_y) {
     //const parallaxFactors = [0.004, 0.008, 0.015, 0.022, 0.03];
     // const parallaxFactors = [0.07, 0.075, 0.08, 0.09, 0.1];
     // const parallaxFactors = [0.35, 0.375, 0.4, 0.45, 0.5];
-    const parallaxFactors = [0.07, 0.075, 0.08, 0.09, 0.11];
+    //const parallaxFactors = [0.07, 0.075, 0.08, 0.09, 0.11];
+    const parallaxFactors = [0.08, 0.09, 0.11];
 
     layer_elements.forEach((img, index) => {
         if (img) {

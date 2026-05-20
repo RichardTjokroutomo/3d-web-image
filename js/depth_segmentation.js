@@ -1,5 +1,7 @@
 import * as ort from "./ort/ort.mjs";
 ort.env.wasm.wasmPaths = new URL("./js/ort/", document.baseURI).href;
+ort.env.wasm.simd = true;
+ort.env.wasm.numThreads = navigator.hardwareConcurrency;
 
 /// arguments: string
 /// retval: ONNX runtime session
