@@ -1,4 +1,4 @@
-import * as ort from "./ort/ort.mjs";
+import * as ort from "./ort/ort.all.mjs";
 ort.env.wasm.wasmPaths = new URL("./js/ort/", document.baseURI).href;
 ort.env.wasm.simd = true;
 ort.env.wasm.numThreads = navigator.hardwareConcurrency;
@@ -6,7 +6,13 @@ ort.env.wasm.numThreads = navigator.hardwareConcurrency;
 /// arguments: string
 /// retval: ONNX runtime session
 export async function ip_prepare_model(model_path){
-    const sess = await ort.InferenceSession.create(model_path);
+    const sess = await ort.InferenceSession.create(model_path,  {
+          executionProviders: [{
+            name: "webgpu",
+            deviceType: "gpu",
+            powerPreference: "high-performance",
+          }, "wasm"],
+        });
 
     return sess;
 }
@@ -184,7 +190,7 @@ export function ip_post_process(result, original_img, mask){
 /// retval: [HTML canvas element, ...]
 export function ip_segment_into_layers(orig_img_elem, depth_canvas){
     console.log("entering ip_segment_into_layers()!")
-    const numLayers = 3;
+    const numLayers = 5;
     const W = depth_canvas.width;
     const H = depth_canvas.height;
     console.log("W: " + W);

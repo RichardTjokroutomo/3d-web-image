@@ -1,4 +1,4 @@
-import * as ort from "./ort/ort.mjs";
+import * as ort from "./ort/ort.all.mjs";
 ort.env.wasm.wasmPaths = new URL("./js/ort/", document.baseURI).href;
 ort.env.wasm.simd = true;
 ort.env.wasm.numThreads = navigator.hardwareConcurrency;
@@ -6,7 +6,15 @@ ort.env.wasm.numThreads = navigator.hardwareConcurrency;
 /// arguments: string
 /// retval: ONNX runtime session
 export async function da_prepare_model(model_path){
-    const sess = await ort.InferenceSession.create(model_path);
+    const sess = await ort.InferenceSession.create(model_path,  {
+      executionProviders: [{
+        name: "webgpu",
+        deviceType: "gpu",
+        powerPreference: "high-performance",
+      }, "wasm"],
+      graphOptimizationLevel: "disabled", // FIXME: we disable optimization because for some reason, ORT cant create a session for dav2_quantized (it crashes). find the root cause.
+    });
+    // const sess = await ort.InferenceSession.create(model_path);
     return sess;
 }
 

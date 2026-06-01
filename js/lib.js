@@ -74,7 +74,7 @@ export async function lib_main(){
     const load_time_0 = Date.now();
 
     // prepare models
-    const da_ort_sess = await da_prepare_model("./models/depth_anything_v2_vits.onnx");
+    const da_ort_sess = await da_prepare_model("./models/depth_anything_v2_vits_quantized.onnx");
     const lama_ort_sess = await ip_prepare_model("./models/lama_regular_quantized.onnx");
 
     const load_time_1 = Date.now();
