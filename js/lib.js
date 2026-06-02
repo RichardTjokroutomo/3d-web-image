@@ -122,20 +122,20 @@ export async function lib_main(){
         console.log(`total time taken to create the elements and add cursor effect: ${TIME_BUTTON_2 - TIME_BUTTON_1} ms`);
 
         // TODO: remove these later.
-        for (let j = 0; j < inpainted_layers.length; j++) {
-            const layer_num = inpainted_layers.length - 1 - j; // reverse so layer_0 = closest
-            const canvas = inpainted_layers[j];
-            canvas.toBlob(function(blob) {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "mask_" + layer_num + ".png";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, "image/png");
-        }
+        // for (let j = 0; j < inpainted_layers.length; j++) {
+        //     const layer_num = inpainted_layers.length - 1 - j; // reverse so layer_0 = closest
+        //     const canvas = inpainted_layers[j];
+        //     canvas.toBlob(function(blob) {
+        //         const url = URL.createObjectURL(blob);
+        //         const a = document.createElement("a");
+        //         a.href = url;
+        //         a.download = "mask_" + layer_num + ".png";
+        //         document.body.appendChild(a);
+        //         a.click();
+        //         document.body.removeChild(a);
+        //         URL.revokeObjectURL(url);
+        //     }, "image/png");
+        // }
     });
 
 }

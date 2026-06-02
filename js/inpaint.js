@@ -190,7 +190,7 @@ export function ip_post_process(result, original_img, mask){
 /// retval: [HTML canvas element, ...]
 export function ip_segment_into_layers(orig_img_elem, depth_canvas){
     console.log("entering ip_segment_into_layers()!")
-    const numLayers = 5;
+    const numLayers = 3;
     const W = depth_canvas.width;
     const H = depth_canvas.height;
     console.log("W: " + W);
@@ -239,16 +239,16 @@ export function ip_segment_into_layers(orig_img_elem, depth_canvas){
         layers.push(canvas);
 
         // download for testing purposes. TODO: remove this later.
-        canvas.toBlob(function(blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "layer_" + layer + ".png";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, "image/png");
+        // canvas.toBlob(function(blob) {
+        //     const url = URL.createObjectURL(blob);
+        //     const a = document.createElement("a");
+        //     a.href = url;
+        //     a.download = "layer_" + layer + ".png";
+        //     document.body.appendChild(a);
+        //     a.click();
+        //     document.body.removeChild(a);
+        //     URL.revokeObjectURL(url);
+        // }, "image/png");
     }
 
     return layers;
