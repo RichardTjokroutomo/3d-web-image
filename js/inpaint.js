@@ -11,7 +11,8 @@ export async function ip_prepare_model(model_path){
             name: "webgpu",
             deviceType: "gpu",
             powerPreference: "high-performance",
-          }, "wasm"],
+          }, 
+          "wasm"],
         });
 
     return sess;
@@ -103,11 +104,46 @@ export function ip_preprocess_mask(cv, canvas, dilate_layer){ // converts RGB to
     return new ort.Tensor("float32", normalized, [1, 1, SZ, SZ]);
 }
 
+/// arguments: ORT tensor (grayscale, float32 in [0,1] or uint8 in {0,255})
+/// retval: ORT tensor of same shape and type with inverted values
+export function ip_invert_mask(tensor) {
+    const n = tensor.data.length;
+    const isFloat = tensor.type === "float32";
+    let inverted;
+
+    if (isFloat) {
+        inverted = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            inverted[i] = 1.0 - tensor.data[i];
+        }
+    } else {
+        inverted = new Uint8Array(n);
+        for (let i = 0; i < n; i++) {
+            inverted[i] = tensor.data[i] === 255 ? 0 : 255;
+        }
+    }
+
+    return new ort.Tensor(tensor.type, inverted, tensor.dims);
+}
+
 /// arguments: ONNX runtime session; ONNX runtime tensor (1, 3, 512, 512); ONNX runtime tensor (1, 1, 512, 512)
 /// retval: ONNX runtime tensor (1, 3, 512, 512)
 export async function ip_run_inference(ort_session, image_tensor, mask_tensor){
-    const feeds = { image: image_tensor, mask: mask_tensor };
+    // model was converted from uint8→fp32, so inputs need [0,255] range
+    const img_raw = new Float32Array(image_tensor.data.length);
+    for (let i = 0; i < image_tensor.data.length; i++) {
+        img_raw[i] = image_tensor.data[i] * 255;
+    }
+    const img_scaled = new ort.Tensor("float32", img_raw, image_tensor.dims);
+
+    const mask_raw = new Float32Array(mask_tensor.data.length);
+    for (let i = 0; i < mask_tensor.data.length; i++) {
+        mask_raw[i] = mask_tensor.data[i] * 255;
+    }
+    const mask_scaled = new ort.Tensor("float32", mask_raw, mask_tensor.dims);
+    const feeds = { image: img_scaled, mask: mask_scaled };
     let result = await ort_session.run(feeds);
+
     return result;
 }
 
@@ -124,7 +160,14 @@ export function ip_post_process(result, original_img, mask){
         return null;
     }
     const tensor = result_tensor[0];
-    const result_data = tensor.data; // float32 arr in [0, 1]
+    const result_data = tensor.data; // float32 arr
+
+    // detect result range: some models output [0,1], some output [0,255]
+    let res_max = 0;
+    for (let i = 0; i < Math.min(HW, result_data.length); i++) {
+        if (result_data[i] > res_max) res_max = result_data[i];
+    }
+    const res_scale = res_max > 1 ? 1 : 255;
 
     // original image
     const original_data = original_img.data; // float32 arr in [0, 1]
@@ -142,9 +185,9 @@ export function ip_post_process(result, original_img, mask){
 
     for (let i = 0; i < HW; i++) {
         const j = i * 4;
-        const res_r = Math.min(255, Math.max(0, Math.round(result_data[i] * 255)));
-        const res_g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * 255)));
-        const res_b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * 255)));
+        const res_r = Math.min(255, Math.max(0, Math.round(result_data[i] * res_scale)));
+        const res_g = Math.min(255, Math.max(0, Math.round(result_data[HW + i] * res_scale)));
+        const res_b = Math.min(255, Math.max(0, Math.round(result_data[2 * HW + i] * res_scale)));
 
         const orig_r = Math.min(255, Math.max(0, Math.round(original_data[i] * 255)));
         const orig_g = Math.min(255, Math.max(0, Math.round(original_data[HW + i] * 255)));
@@ -190,7 +233,7 @@ export function ip_post_process(result, original_img, mask){
 /// retval: [HTML canvas element, ...]
 export function ip_segment_into_layers(orig_img_elem, depth_canvas){
     console.log("entering ip_segment_into_layers()!")
-    const numLayers = 3;
+    const numLayers = 4;
     const W = depth_canvas.width;
     const H = depth_canvas.height;
     console.log("W: " + W);

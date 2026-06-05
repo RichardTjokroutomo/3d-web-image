@@ -1,5 +1,5 @@
 import { da_prepare_model, da_run_inference, da_pre_process, da_post_process } from "./depth_segmentation.js";
-import { ip_segment_into_layers, ip_prepare_model, ip_pre_process, ip_preprocess_mask, ip_run_inference, ip_post_process, ip_image_processing, ip_create_crop_mask } from "./inpaint.js";
+import { ip_invert_mask, ip_segment_into_layers, ip_prepare_model, ip_pre_process, ip_preprocess_mask, ip_run_inference, ip_post_process, ip_image_processing, ip_create_crop_mask } from "./inpaint.js";
 import { util_create_canvas_from_image_element, util_resize_canvas, util_create_image_from_canvas_element } from "./utils.js";
 import { setup_parallax_effect } from "./desktop_cursor.js";
 
@@ -25,11 +25,23 @@ async function inpaint_layers(ort_sess, img_elem_canvas, layer_i_canvas, layer_i
     const prep_img = ip_pre_process(cv, img_elem_canvas); // ORT tensor
     const layer_i_mask = ip_preprocess_mask(cv, layer_i_canvas, false); // ORT tensor, binary
     const layer_i_plus_one_mask = ip_preprocess_mask(cv, layer_i_plus_one_canvas, false); // ORT tensor, binary for model input
+    const layer_i_plus_one_inverted = ip_invert_mask(layer_i_plus_one_mask);
     const blend_mask = ip_preprocess_mask(cv, layer_i_plus_one_canvas, true); // ORT tensor, feathered for alpha blending
     const TIME_INPAINT_0 = Date.now();
-    const result = await ip_run_inference(ort_sess, prep_img, layer_i_plus_one_mask); // ORT tensor
+    const result = await ip_run_inference(ort_sess, prep_img, layer_i_plus_one_inverted); // ORT tensor
     const TIME_INPAINT_1 = Date.now();
     const canvas = ip_post_process(result, prep_img, blend_mask); // canvas (feathered blend)
+
+    // canvas.toBlob(function(blob) {
+    //             const url = URL.createObjectURL(blob);
+    //             const a = document.createElement("a");
+    //             a.href = url;
+    //             a.download = "post_processed_" + ".png";
+    //             document.body.appendChild(a);
+    //             a.click();
+    //             document.body.removeChild(a);
+    //             URL.revokeObjectURL(url);
+    //         }, "image/png");
 
     // create feathered combined mask for smooth crop boundary
     const crop_mask = ip_create_crop_mask(cv, layer_i_plus_one_mask, layer_i_mask); // ORT tensor
@@ -75,7 +87,7 @@ export async function lib_main(){
 
     // prepare models
     const da_ort_sess = await da_prepare_model("./models/depth_anything_v2_vits_quantized.onnx");
-    const lama_ort_sess = await ip_prepare_model("./models/lama_regular_quantized.onnx");
+    const lama_ort_sess = await ip_prepare_model("./models/migan_processed.onnx");
 
     const load_time_1 = Date.now();
     console.log(`time taken to prepare models: ${load_time_1 - load_time_0} ms`);
@@ -129,7 +141,7 @@ export async function lib_main(){
         //         const url = URL.createObjectURL(blob);
         //         const a = document.createElement("a");
         //         a.href = url;
-        //         a.download = "mask_" + layer_num + ".png";
+        //         a.download = "cropped_inpainted_" + layer_num + ".png";
         //         document.body.appendChild(a);
         //         a.click();
         //         document.body.removeChild(a);
